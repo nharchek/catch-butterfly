@@ -1,0 +1,758 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Catch a Butterfly</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Figtree:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap">
+<style>
+/* Layout: full-bleed meadow canvas; floating field-notebook HUD across the top; centered cards for start, level-up and results */
+:root{
+  --sky:#BFE6F2;
+  --ink:#1F3524;
+  --ink-soft:#4E6B55;
+  --leaf:#2F7A3E;
+  --card:rgba(255,255,255,.9);
+  --line:#D3E6D0;
+  --monarch:#F2862E;
+  --morpho:#2B86F0;
+  --emperor:#A64BE0;
+  --alert:#D9402B;
+  --display:"Fredoka",ui-rounded,"Segoe UI Rounded","Segoe UI",system-ui,sans-serif;
+  --body:"Figtree",system-ui,"Segoe UI",Roboto,sans-serif;
+  --mono:"DM Mono",ui-monospace,Consolas,monospace;
+  color-scheme:light;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0}
+body{background:var(--sky);color:var(--ink);font-family:var(--body);overflow:hidden;user-select:none;-webkit-user-select:none}
+#field{position:fixed;inset:0;display:block;touch-action:none}
+body.playing #field{cursor:none}
+
+/* HUD */
+.hud{position:fixed;top:0;left:0;right:0;z-index:2;pointer-events:none;
+  padding-top:calc(env(safe-area-inset-top,0px) + 12px);
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.pill{background:var(--card);border-radius:14px;padding:7px 14px 8px;display:flex;flex-direction:column;justify-content:center;gap:3px;
+  box-shadow:0 2px 0 rgba(31,53,36,.14);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);min-width:0}
+.lab{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-soft);font-weight:700}
+.val{font-family:var(--mono);font-size:19px;line-height:1.1;font-variant-numeric:tabular-nums}
+.lvl .val{font-family:var(--display);font-weight:600;font-size:17px;display:flex;align-items:center;gap:7px;white-space:nowrap}
+.chip{width:12px;height:12px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 2px rgba(0,0,0,.18)}
+.dots{display:flex;gap:5px;align-items:center;height:21px}
+.dot{width:13px;height:13px;border-radius:50%;border:2px solid var(--ink-soft);opacity:.45}
+.dot.on{opacity:1;border-color:transparent}
+.meter{flex:1 1 160px;min-width:120px}
+.bar{height:10px;border-radius:6px;background:var(--line);overflow:hidden;margin-top:5px}
+.fill{height:100%;width:100%;border-radius:6px;background:var(--leaf)}
+.fill.low{background:var(--alert)}
+.clock{margin-left:auto}
+.clock .val{font-size:22px}
+.clock.low .val{color:var(--alert)}
+
+/* Banner */
+.banner{position:fixed;inset:0;z-index:2;display:grid;place-content:center;justify-items:center;gap:8px;pointer-events:none;text-align:center;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.b-lvl{font-family:var(--display);font-weight:700;font-size:clamp(44px,9vw,84px);line-height:1;color:#fff;
+  text-shadow:0 3px 0 rgba(31,53,36,.35),0 0 30px rgba(31,53,36,.25);animation:pop .5s cubic-bezier(.2,1.6,.4,1)}
+.b-sub{font-weight:600;font-size:clamp(15px,2.4vw,19px);background:var(--card);padding:8px 16px;border-radius:18px;max-width:640px;color:var(--ink)}
+.sep{width:6px;flex:none}
+.b-msg{font-family:var(--display);font-weight:600;font-size:clamp(18px,3vw,24px);line-height:1.3;background:var(--ink);color:#fff;padding:10px 20px;border-radius:18px;max-width:640px;text-wrap:balance;margin-bottom:6px}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* Overlays */
+.overlay{position:fixed;inset:0;z-index:3;display:grid;place-items:center;overflow-y:auto;background:rgba(31,53,36,.18);
+  padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.card{width:100%;max-width:600px;background:rgba(255,255,255,.95);border-radius:24px;padding:28px clamp(18px,4vw,32px);
+  box-shadow:0 18px 50px rgba(31,53,36,.25);display:flex;flex-direction:column;gap:18px}
+h1,h2{font-family:var(--display);font-weight:700;margin:0;line-height:1.05;text-wrap:balance;color:var(--ink)}
+h1{font-size:clamp(36px,7vw,52px)}
+h2{font-size:clamp(28px,5.5vw,40px)}
+.lede{margin:0;font-size:16px;line-height:1.5;color:var(--ink-soft);max-width:60ch}
+.levels{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.lv{border:2px solid var(--line);border-radius:16px;padding:12px 12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.lv canvas{width:72px;height:56px;align-self:center}
+.lv .n{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:700;color:var(--ink-soft)}
+.lv .nm{font-family:var(--display);font-weight:600;font-size:18px}
+.lv ul{list-style:none;margin:0;padding:0;font-size:13.5px;line-height:1.55;color:var(--ink)}
+.lv b{font-family:var(--mono);font-weight:500}
+.unlock{margin:0;padding:12px 14px;border-radius:14px;background:#E6F4F7;border:2px dashed #7FC3D6;font-size:14px;line-height:1.55;color:var(--ink)}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.btn{font-family:var(--display);font-weight:600;font-size:20px;border:0;border-radius:999px;padding:12px 30px;cursor:pointer;
+  background:var(--leaf);color:#fff;box-shadow:0 4px 0 #1E5229;transition:transform .08s}
+.btn:hover{transform:translateY(-1px)}
+.btn:active{transform:translateY(2px);box-shadow:0 2px 0 #1E5229}
+.btn:focus-visible{outline:3px solid var(--monarch);outline-offset:3px}
+.note{font-size:13.5px;color:var(--ink-soft)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.stat{border:2px solid var(--line);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.stat .val{font-size:24px}
+.stat.big{border-color:var(--leaf)}
+@media (prefers-reduced-motion:reduce){.b-lvl{animation:none}}
+</style>
+
+<canvas id="field" aria-label="Meadow with butterflies"></canvas>
+
+<div class="hud" id="hud" hidden>
+  <div class="pill lvl"><span class="lab" id="hLvlNum">Level 1</span><span class="val"><span class="chip" id="hChip"></span><span id="hLvlName">Monarch</span></span></div>
+  <div class="pill"><span class="lab">Score</span><span class="val" id="hScore">0</span></div>
+  <div class="pill"><span class="lab">Caught</span><span class="dots" id="hDots"></span></div>
+  <div class="pill meter" id="hMeterPill"><span class="lab" id="hMeterLab">Escapes in</span><div class="bar"><div class="fill" id="hFill"></div></div></div>
+  <div class="pill clock" id="hClockPill"><span class="lab">Game time</span><span class="val" id="hClock">3:00</span></div>
+</div>
+
+<div class="banner" id="banner" hidden>
+  <div class="b-msg" id="bMsg" hidden></div>
+  <div class="b-lvl" id="bLvl">Level 1</div>
+  <div class="b-sub" id="bSub"></div>
+</div>
+
+<div class="overlay" id="menu">
+  <div class="card">
+    <h1>Catch a Butterfly</h1>
+    <p class="lede">Click a butterfly with your net before it flies away. Clear each level to meet a faster, rarer butterfly. You get 3 minutes for the whole game.</p>
+    <div class="levels" id="levelCards"></div>
+    <p class="unlock"><b>Step 2 · The Pond.</b> Clear all three levels before the clock runs out and the time you have left carries into a bonus round where 5 Monarchs (3 points, −2 per miss), 4 Blue Morphos (5 points, −2 per miss) and 3 Purple Emperors (7 points, −2 per miss) all fly at once over a pond.</p>
+    <div class="row">
+      <button class="btn" id="startBtn" type="button">Start</button>
+      <span class="note" id="bestNote"></span>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="over" hidden>
+  <div class="card">
+    <h2 id="oTitle">Time's up</h2>
+    <p class="lede" id="oSub"></p>
+    <div class="stats" id="oStats"></div>
+    <div class="row">
+      <button class="btn" id="againBtn" type="button">Play again</button>
+      <span class="note" id="oBest"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+const TAU = Math.PI * 2;
+const GAME_SECONDS = 180;
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Level 1 is gentle, level 2 is quick, level 3 barely lingers and ends the game.
+const LEVELS = [
+  { n:1, name:'Monarch',        color:'#F2862E', color2:'#E06A14', edge:'#3A1D0C', points:3,  need:5, life:6.0, speed:180, size:1.15, hit:52, dart:0.2, flapRate:14, miss:2 },
+  { n:2, name:'Blue Morpho',    color:'#2B86F0', color2:'#5AAEFF', edge:'#0D2149', points:5,  need:4, life:2.5, speed:275, size:0.9,  hit:38, dart:0.9, flapRate:19, miss:2 },
+  { n:3, name:'Purple Emperor', color:'#A64BE0', color2:'#C77BF2', edge:'#2A0C3F', points:7,  need:3, life:1.5, speed:340, size:0.8,  hit:34, dart:1.8, flapRate:25, miss:2 },
+];
+
+// Step 2, unlocked by clearing level 3 inside the clock: every butterfly flies at once over the pond and none escape.
+const STEP2 = [
+  { ...LEVELS[0], points:3, speed:200, miss:2, count:5 },
+  { ...LEVELS[1], points:5, miss:2, count:4 },
+  { ...LEVELS[2], points:7, miss:2, count:3 },
+].map(L => ({ ...L, life: Infinity }));
+const STEP2_TOTAL = STEP2.reduce((n, L) => n + L.count, 0);
+const SCENE1 = { sky0:'#8FD0EC', sky1:'#E2F5EE', far:'#A9D48A', g0:'#7DBB60', g1:'#4F9442' };
+const SCENE2 = { sky0:'#F2B880', sky1:'#FCE9C9', far:'#B6C978', g0:'#8DBA5C', g1:'#5A8E44' };
+
+const $ = id => document.getElementById(id);
+const cv = $('field'), ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1, S = 1, horizon = 0, topLimit = 100;
+let flowers = [], clouds = [], flowers2 = [], pads = [], reeds = [], pond = null;
+
+const G = {
+  state: 'menu',            // menu | banner | playing | finishing | over
+  level: 0, score: 0, caughtLevel: 0, caught: 0, escaped: 0, clicks: 0, hits: 0,
+  timeLeft: GAME_SECONDS, bf: null, leaving: [], spawnT: 0, bannerT: 0, endT: 0, result: null,
+  step: 1, flock: [], caught2: [0, 0, 0],
+  ambient: [], particles: [], floaters: [], ripples: [],
+};
+const pointer = { x: -999, y: -999, mouse: false, swing: 0 };
+
+/* ---------- scenery ---------- */
+function rand(a, b) { return a + Math.random() * (b - a); }
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = innerWidth; H = innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  S = Math.max(0.6, Math.min(1.2, Math.min(W, H) / 700));
+  horizon = H * 0.58;
+  buildScenery();
+  measureHud();
+}
+function measureHud() {
+  const hud = $('hud');
+  topLimit = hud.hidden ? 60 : hud.getBoundingClientRect().bottom + 10;
+}
+function buildScenery() {
+  const petals = ['#FFFFFF', '#FFE45C', '#FF9EC4', '#FFB35C', '#E9D7FF', '#FF6B6B'];
+  flowers = [];
+  const count = Math.round((W * (H - horizon)) / 5200);
+  for (let i = 0; i < count; i++) {
+    const y = rand(horizon + 12, H + 10);
+    const depth = (y - horizon) / (H - horizon);
+    flowers.push({ x: rand(-10, W + 10), y, r: 2.5 + depth * 6, c: petals[(Math.random() * petals.length) | 0], ph: rand(0, TAU), stem: 6 + depth * 18 });
+  }
+  flowers.sort((a, b) => a.y - b.y);
+  clouds = [];
+  for (let i = 0; i < 5; i++) clouds.push({ x: rand(0, W), y: rand(H * 0.06, horizon * 0.6), s: rand(0.6, 1.3), v: rand(6, 16) });
+
+  // Step 2 meadow: a pond with lily pads and cattails, ringed by tulips, lavender and sunflowers
+  const gh = H - horizon;
+  pond = { x: W * 0.36, y: horizon + gh * 0.5, rx: Math.min(W * 0.26, 300), ry: Math.min(gh * 0.24, 110), ripples: [] };
+  for (let i = 0; i < 4; i++) pond.ripples.push({ x: pond.x + rand(-0.5, 0.5) * pond.rx, y: pond.y + rand(-0.4, 0.4) * pond.ry, ph: rand(0, 1) });
+  pads = [];
+  for (let i = 0; i < 6; i++) {
+    const a = rand(0, TAU), d = rand(0.15, 0.75);
+    pads.push({ x: pond.x + Math.cos(a) * pond.rx * d, y: pond.y + Math.sin(a) * pond.ry * d, r: rand(10, 18) * S, rot: rand(0, TAU), bloom: i % 2 === 0 });
+  }
+  reeds = [];
+  for (let i = 0; i < 12; i++) {
+    const a = i < 6 ? rand(Math.PI * 0.85, Math.PI * 1.25) : rand(-0.3, 0.2);
+    reeds.push({ x: pond.x + Math.cos(a) * pond.rx * 0.97, y: pond.y + Math.sin(a) * pond.ry * 0.97, h: rand(34, 64) * S, lean: rand(-0.25, 0.25), ph: rand(0, TAU) });
+  }
+  reeds.sort((a, b) => a.y - b.y);
+  const kinds = ['tulip', 'tulip', 'lavender', 'lavender', 'sunflower'];
+  const tulipColors = ['#E8344E', '#FF7A3D', '#F7D046', '#F38BB9'];
+  flowers2 = [];
+  for (let i = 0; i < count; i++) {
+    const x = rand(-10, W + 10), y = rand(horizon + 12, H + 10);
+    const dx = (x - pond.x) / (pond.rx + 24), dy = (y - pond.y) / (pond.ry + 18);
+    if (dx * dx + dy * dy < 1) continue;
+    const depth = (y - horizon) / gh;
+    flowers2.push({ x, y, kind: kinds[(Math.random() * kinds.length) | 0], c: tulipColors[(Math.random() * tulipColors.length) | 0],
+      r: 3 + depth * 6.5, stem: 8 + depth * 24, ph: rand(0, TAU) });
+  }
+  flowers2.sort((a, b) => a.y - b.y);
+}
+function drawCloud(c) {
+  ctx.fillStyle = 'rgba(255,255,255,.85)';
+  ctx.beginPath();
+  const s = c.s * 40;
+  ctx.ellipse(c.x, c.y, s * 1.6, s * 0.55, 0, 0, TAU);
+  ctx.ellipse(c.x - s * 0.6, c.y - s * 0.3, s * 0.7, s * 0.55, 0, 0, TAU);
+  ctx.ellipse(c.x + s * 0.4, c.y - s * 0.45, s * 0.85, s * 0.7, 0, 0, TAU);
+  ctx.fill();
+}
+function drawScene(t, dt) {
+  const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+  const pal = G.step === 2 ? SCENE2 : SCENE1;
+  sky.addColorStop(0, pal.sky0); sky.addColorStop(1, pal.sky1);
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, horizon + 40);
+
+  ctx.fillStyle = 'rgba(255,240,180,.55)';
+  ctx.beginPath(); ctx.arc(W * 0.82, H * 0.14, 70 * S, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#FFF4C2';
+  ctx.beginPath(); ctx.arc(W * 0.82, H * 0.14, 44 * S, 0, TAU); ctx.fill();
+
+  for (const c of clouds) {
+    if (!REDUCED) { c.x += c.v * dt; if (c.x - 120 > W) c.x = -120; }
+    drawCloud(c);
+  }
+
+  // far and near hills
+  ctx.fillStyle = pal.far;
+  ctx.beginPath(); ctx.moveTo(0, horizon);
+  for (let x = 0; x <= W; x += 20) ctx.lineTo(x, horizon - 26 - Math.sin(x / 210) * 22 - Math.sin(x / 90) * 6);
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
+  const ground = ctx.createLinearGradient(0, horizon, 0, H);
+  ground.addColorStop(0, pal.g0); ground.addColorStop(1, pal.g1);
+  ctx.fillStyle = ground;
+  ctx.beginPath(); ctx.moveTo(0, horizon + 10);
+  for (let x = 0; x <= W; x += 20) ctx.lineTo(x, horizon + 8 - Math.sin(x / 160 + 1) * 14);
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
+
+  if (G.step === 2) { drawPondScene(t); return; }
+  for (const f of flowers) {
+    const sway = REDUCED ? 0 : Math.sin(t * 1.4 + f.ph) * f.r * 0.35;
+    ctx.strokeStyle = '#3F7F35'; ctx.lineWidth = Math.max(1, f.r * 0.25);
+    ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.quadraticCurveTo(f.x, f.y - f.stem * 0.5, f.x + sway, f.y - f.stem); ctx.stroke();
+    const cx = f.x + sway, cy = f.y - f.stem;
+    ctx.fillStyle = f.c;
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * TAU + f.ph;
+      ctx.beginPath(); ctx.arc(cx + Math.cos(a) * f.r * 0.7, cy + Math.sin(a) * f.r * 0.7, f.r * 0.6, 0, TAU); ctx.fill();
+    }
+    ctx.fillStyle = '#F2B705';
+    ctx.beginPath(); ctx.arc(cx, cy, f.r * 0.45, 0, TAU); ctx.fill();
+  }
+}
+
+function drawPondScene(t) {
+  const p = pond;
+  ctx.fillStyle = '#5E7F3E';
+  ctx.beginPath(); ctx.ellipse(p.x, p.y + 4, p.rx + 10, p.ry + 7, 0, 0, TAU); ctx.fill();
+  ctx.save();
+  ctx.beginPath(); ctx.ellipse(p.x, p.y, p.rx, p.ry, 0, 0, TAU);
+  const g = ctx.createLinearGradient(0, p.y - p.ry, 0, p.y + p.ry);
+  g.addColorStop(0, '#9FDCE8'); g.addColorStop(1, '#2B86A8');
+  ctx.fillStyle = g; ctx.fill(); ctx.clip();
+  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < 7; i++) {
+    const yy = p.y - p.ry * 0.7 + i * p.ry * 0.22;
+    const off = REDUCED ? 0 : Math.sin(t * 0.9 + i * 1.7) * p.rx * 0.08;
+    const x0 = p.x - p.rx * 0.5 + (((i * 37) % 60) / 60) * p.rx * 0.6 + off;
+    ctx.moveTo(x0, yy); ctx.lineTo(x0 + p.rx * 0.18, yy);
+  }
+  ctx.stroke();
+  for (const r of p.ripples) {
+    const k = REDUCED ? 0.5 : (t * 0.35 + r.ph) % 1;
+    const rr = 6 + k * 46 * S;
+    ctx.strokeStyle = 'rgba(255,255,255,' + (0.6 * (1 - k)) + ')'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.ellipse(r.x, r.y, rr, rr * 0.38, 0, 0, TAU); ctx.stroke();
+  }
+  ctx.restore();
+  for (const pd of pads) {
+    ctx.save(); ctx.translate(pd.x, pd.y); ctx.scale(1, 0.5);
+    ctx.fillStyle = '#3D8A3F';
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, pd.r, pd.rot + 0.35, pd.rot + TAU - 0.35); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.restore();
+    if (pd.bloom) {
+      ctx.fillStyle = '#FFC1DA';
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * TAU;
+        ctx.beginPath(); ctx.ellipse(pd.x + Math.cos(a) * pd.r * 0.28, pd.y - 3 + Math.sin(a) * pd.r * 0.14, pd.r * 0.26, pd.r * 0.14, a, 0, TAU); ctx.fill();
+      }
+      ctx.fillStyle = '#FFE066'; ctx.beginPath(); ctx.arc(pd.x, pd.y - 3, pd.r * 0.12, 0, TAU); ctx.fill();
+    }
+  }
+  for (const rd of reeds) {
+    const sway = REDUCED ? 0 : Math.sin(t * 1.2 + rd.ph) * 4;
+    const tx = rd.x + rd.lean * rd.h + sway, ty = rd.y - rd.h;
+    ctx.strokeStyle = '#4C7A2E'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(rd.x, rd.y); ctx.quadraticCurveTo(rd.x, rd.y - rd.h * 0.6, tx, ty); ctx.stroke();
+    ctx.fillStyle = '#7A4A26';
+    ctx.beginPath(); ctx.ellipse(tx, ty + rd.h * 0.12, 3.2 * S + 1, rd.h * 0.13, rd.lean, 0, TAU); ctx.fill();
+  }
+  for (const f of flowers2) {
+    const sway = REDUCED ? 0 : Math.sin(t * 1.4 + f.ph) * f.r * 0.35;
+    const cx = f.x + sway, cy = f.y - f.stem, r = f.r;
+    ctx.strokeStyle = '#3F7F35'; ctx.lineWidth = Math.max(1, r * 0.25);
+    ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.quadraticCurveTo(f.x, f.y - f.stem * 0.5, cx, cy); ctx.stroke();
+    if (f.kind === 'tulip') {
+      ctx.fillStyle = f.c;
+      ctx.beginPath(); ctx.moveTo(cx - r, cy - r * 0.9);
+      ctx.lineTo(cx - r * 0.5, cy - r * 0.3); ctx.lineTo(cx, cy - r * 1.1); ctx.lineTo(cx + r * 0.5, cy - r * 0.3); ctx.lineTo(cx + r, cy - r * 0.9);
+      ctx.quadraticCurveTo(cx + r * 1.05, cy + r * 0.7, cx, cy + r * 0.6);
+      ctx.quadraticCurveTo(cx - r * 1.05, cy + r * 0.7, cx - r, cy - r * 0.9);
+      ctx.fill();
+    } else if (f.kind === 'lavender') {
+      ctx.fillStyle = '#8E6AD8';
+      for (let k = 0; k < 6; k++) { ctx.beginPath(); ctx.ellipse(cx + (k % 2 ? 1 : -1) * r * 0.25, cy + k * r * 0.45 - r, r * 0.32, r * 0.42, 0, 0, TAU); ctx.fill(); }
+    } else {
+      const sr = r * 1.3;
+      ctx.fillStyle = '#FFC93C';
+      for (let k = 0; k < 10; k++) {
+        const a = (k / 10) * TAU + f.ph;
+        ctx.beginPath(); ctx.ellipse(cx + Math.cos(a) * sr * 0.75, cy + Math.sin(a) * sr * 0.75, sr * 0.45, sr * 0.2, a, 0, TAU); ctx.fill();
+      }
+      ctx.fillStyle = '#6B3E1F'; ctx.beginPath(); ctx.arc(cx, cy, sr * 0.48, 0, TAU); ctx.fill();
+    }
+  }
+}
+
+/* ---------- butterflies ---------- */
+const SPOTS = [[40, -25, 2.2], [35, -31, 1.7], [43, -18, 1.5], [24, 27, 1.8], [29, 19, 1.4]];
+function drawButterfly(c, x, y, ang, sc, flap, L, alpha) {
+  c.save();
+  c.globalAlpha = alpha;
+  c.translate(x, y); c.rotate(ang + Math.PI / 2); c.scale(sc, sc);
+  c.lineJoin = 'round';
+  for (const side of [-1, 1]) {
+    c.save(); c.scale(side * flap, 1);
+    c.lineWidth = 2.4; c.strokeStyle = L.edge;
+    c.beginPath(); c.moveTo(1, 0); c.bezierCurveTo(22, -2, 34, 14, 26, 28); c.bezierCurveTo(19, 38, 5, 32, 1, 14); c.closePath();
+    c.fillStyle = L.color2; c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(1, -2); c.bezierCurveTo(8, -30, 34, -40, 44, -24); c.bezierCurveTo(48, -14, 30, -2, 1, 4); c.closePath();
+    c.fillStyle = L.color; c.fill(); c.stroke();
+    c.globalAlpha = alpha * 0.45; c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(2, 0); c.lineTo(37, -27); c.moveTo(2, 1); c.lineTo(31, -10); c.moveTo(2, 5); c.lineTo(22, 26); c.stroke();
+    c.globalAlpha = alpha;
+    c.fillStyle = '#FFFFFF';
+    for (const [sx, sy, r] of SPOTS) { c.beginPath(); c.arc(sx, sy, r, 0, TAU); c.fill(); }
+    c.restore();
+  }
+  c.fillStyle = L.edge;
+  c.beginPath(); c.ellipse(0, 4, 3, 15, 0, 0, TAU); c.fill();
+  c.beginPath(); c.arc(0, -12, 3.8, 0, TAU); c.fill();
+  c.lineWidth = 1.4; c.strokeStyle = L.edge;
+  c.beginPath(); c.moveTo(-1, -14); c.quadraticCurveTo(-6, -24, -9, -30); c.moveTo(1, -14); c.quadraticCurveTo(6, -24, 9, -30); c.stroke();
+  c.beginPath(); c.arc(-9, -30, 1.8, 0, TAU); c.fill();
+  c.beginPath(); c.arc(9, -30, 1.8, 0, TAU); c.fill();
+  c.restore();
+}
+function wrapAngle(a) { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; }
+function turnToward(a, target, rate) {
+  const d = wrapAngle(target - a);
+  return a + Math.max(-rate, Math.min(rate, d));
+}
+function makeButterfly(L, ambient) {
+  let x, y, tries = 0;
+  const top = Math.max(topLimit, 60) + 40 * S;
+  do {
+    x = rand(70 * S, W - 70 * S);
+    y = rand(top, H - 70 * S);
+    tries++;
+  } while (tries < 12 && Math.hypot(x - pointer.x, y - pointer.y) < 170 * S);
+  const angle = rand(-Math.PI, Math.PI);
+  return { L, x, y, angle, face: angle, turn: 0, phase: rand(0, TAU), t: 0, boost: 0, alpha: 0, state: 'fly', ambient: !!ambient };
+}
+function moveButterfly(b, dt) {
+  const L = b.L;
+  b.t += dt;
+  b.phase += dt * L.flapRate * (b.state === 'leave' ? 1.5 : 1);
+  if (b.state === 'leave') {
+    b.angle = turnToward(b.angle, -Math.PI / 2, 5 * dt);
+    const sp = L.speed * S * 1.8;
+    b.x += Math.cos(b.angle) * sp * dt; b.y += Math.sin(b.angle) * sp * dt;
+    b.alpha = Math.max(0, b.alpha - dt * 1.4);
+  } else {
+    b.alpha = Math.min(1, b.alpha + dt * 6);
+    b.turn += (Math.random() - 0.5) * 9 * dt;
+    b.turn = Math.max(-2.6, Math.min(2.6, b.turn * (1 - dt * 0.6)));
+    b.angle += b.turn * dt;
+    if (L.dart && Math.random() < L.dart * dt) { b.angle += rand(-2.2, 2.2); b.boost = 0.9; }
+    b.boost = Math.max(0, b.boost - dt * 1.5);
+    const pad = 70 * S, top = (b.ambient ? 40 : topLimit) + pad * 0.6;
+    if (b.x < pad || b.x > W - pad || b.y < top || b.y > H - pad) {
+      const cx = W / 2, cy = (top + H - pad) / 2;
+      b.angle = turnToward(b.angle, Math.atan2(cy - b.y, cx - b.x), 4.5 * dt);
+    }
+    const speed = L.speed * S * (b.ambient ? 0.55 : 1) * (1 + b.boost);
+    b.x += Math.cos(b.angle) * speed * dt;
+    b.y += Math.sin(b.angle) * speed * dt + Math.sin(b.t * 8) * 26 * S * dt;
+    b.x = Math.max(12, Math.min(W - 12, b.x));
+    b.y = Math.max(top - pad * 0.5, Math.min(H - 12, b.y));
+  }
+  b.face = turnToward(b.face, b.angle, 7 * dt);
+}
+function renderButterfly(b) {
+  const flap = 0.18 + 0.82 * Math.abs(Math.cos(b.phase));
+  let alpha = b.alpha;
+  if (!b.ambient && b.state === 'fly' && b.t > b.L.life * 0.7) alpha *= 0.55 + 0.45 * Math.abs(Math.cos(b.t * 14));
+  // ground shadow
+  ctx.fillStyle = 'rgba(31,53,36,' + (0.12 * b.alpha) + ')';
+  ctx.beginPath(); ctx.ellipse(b.x + 8 * S, b.y + 40 * S, 22 * S * b.L.size * flap + 6, 5 * S, 0, 0, TAU); ctx.fill();
+  drawButterfly(ctx, b.x, b.y, b.face, b.L.size * S * 0.95, flap, b.L, alpha);
+}
+
+/* ---------- effects ---------- */
+function burst(x, y, L) {
+  for (let i = 0; i < 28; i++) {
+    const a = rand(0, TAU), v = rand(60, 260) * S;
+    G.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rand(0.5, 0.9), t: 0,
+      c: i % 3 === 0 ? '#FFFFFF' : (i % 2 ? L.color : L.color2), r: rand(2, 5) * S });
+  }
+}
+function floater(x, y, text, color) { G.floaters.push({ x, y, text, color, t: 0 }); }
+function updateEffects(dt) {
+  for (const p of G.particles) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 1 - dt * 2.5; p.vy *= 1 - dt * 2.5; }
+  G.particles = G.particles.filter(p => p.t < p.life);
+  for (const f of G.floaters) f.t += dt;
+  G.floaters = G.floaters.filter(f => f.t < 1.1);
+  for (const r of G.ripples) r.t += dt;
+  G.ripples = G.ripples.filter(r => r.t < 0.4);
+  pointer.swing = Math.max(0, pointer.swing - dt * 6);
+}
+function drawEffects() {
+  for (const r of G.ripples) {
+    ctx.strokeStyle = 'rgba(255,255,255,' + (1 - r.t / 0.4) + ')'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(r.x, r.y, 8 + r.t * 70, 0, TAU); ctx.stroke();
+  }
+  for (const p of G.particles) {
+    ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.c;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const f of G.floaters) {
+    const a = 1 - f.t / 1.1;
+    ctx.globalAlpha = a;
+    ctx.font = '700 ' + Math.round(30 * S + 4) + 'px Fredoka, "Segoe UI", system-ui, sans-serif';
+    ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(31,53,36,.55)';
+    const y = f.y - f.t * 60;
+    ctx.strokeText(f.text, f.x, y); ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, y);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawNet() {
+  if (!pointer.mouse || (G.state !== 'playing' && G.state !== 'banner' && G.state !== 'finishing')) return;
+  const r = 26;
+  ctx.save();
+  ctx.translate(pointer.x, pointer.y);
+  ctx.rotate(-0.7 * Math.sin(pointer.swing * Math.PI));
+  ctx.strokeStyle = '#7A4E24'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(r * 0.72, r * 0.72); ctx.lineTo(r * 3, r * 3); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.28)';
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.clip();
+  ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let k = -r; k <= r; k += 7) { ctx.moveTo(k, -r); ctx.lineTo(k + r, r); ctx.moveTo(k + r, -r); ctx.lineTo(k, r); }
+  ctx.stroke(); ctx.restore();
+  ctx.lineWidth = 4; ctx.strokeStyle = '#2B3A2E';
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+  ctx.lineWidth = 2; ctx.strokeStyle = '#F4F7F2';
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+  ctx.restore();
+}
+
+/* ---------- game flow ---------- */
+function setAmbient() {
+  G.ambient = LEVELS.map(L => { const b = makeButterfly(L, true); b.alpha = 1; return b; });
+}
+function startGame() {
+  Object.assign(G, { level: 0, score: 0, caughtLevel: 0, caught: 0, escaped: 0, clicks: 0, hits: 0,
+    timeLeft: GAME_SECONDS, bf: null, leaving: [], particles: [], floaters: [], ripples: [], ambient: [], result: null,
+    step: 1, flock: [], caught2: [0, 0, 0] });
+  $('menu').hidden = true; $('over').hidden = true; $('hud').hidden = false;
+  document.body.classList.add('playing');
+  measureHud();
+  showBanner();
+}
+function showBanner() {
+  const L = LEVELS[G.level];
+  G.state = 'banner'; G.bannerT = G.level === 0 ? 3.5 : 2.0; G.bf = null;
+  $('bMsg').hidden = G.level !== 0;
+  $('bMsg').textContent = 'Step 1 · You have ' + LEVELS[0].need + ' Monarchs, ' + LEVELS[1].need + ' Blue Morphos and ' + LEVELS[2].need + ' Purple Emperors to catch';
+  $('bLvl').textContent = 'Level ' + L.n;
+  $('bLvl').style.animation = 'none'; void $('bLvl').offsetWidth; $('bLvl').style.animation = '';
+  $('bSub').textContent = L.name + ' · ' + L.points + ' points each · catch ' + L.need + ' · ' + L.life + ' s before it escapes' + (L.miss ? ' · −' + L.miss + ' per missed click' : '');
+  $('banner').hidden = false;
+  renderHud(true);
+}
+function spawn() { G.bf = makeButterfly(LEVELS[G.level], false); }
+function escape() {
+  const b = G.bf;
+  b.state = 'leave'; G.leaving.push(b); G.bf = null; G.escaped++;
+  floater(b.x, b.y - 30 * S, 'Escaped', '#FFFFFF');
+  G.spawnT = 0.5;
+}
+function tryCatch(x, y) {
+  G.clicks++;
+  pointer.swing = 1;
+  if (G.step === 2) return tryCatchFlock(x, y);
+  const b = G.bf;
+  if (b && b.state === 'fly' && Math.hypot(x - b.x, y - b.y) <= b.L.hit * S) {
+    const L = b.L;
+    G.hits++; G.caught++; G.caughtLevel++; G.score += L.points;
+    burst(b.x, b.y, L);
+    floater(b.x, b.y - 20 * S, '+' + L.points, L.color2);
+    G.bf = null;
+    if (G.caughtLevel >= L.need) {
+      if (G.level === LEVELS.length - 1) startStep2();
+      else { G.level++; G.caughtLevel = 0; showBanner(); }
+    } else {
+      G.spawnT = 0.35;
+    }
+  } else {
+    G.ripples.push({ x, y, t: 0 });
+    const L = LEVELS[G.level];
+    if (L.miss && G.score > 0) {
+      G.score = Math.max(0, G.score - L.miss);
+      floater(x, y - 20 * S, '−' + L.miss, '#FF8A7A');
+    }
+  }
+}
+function startStep2() {
+  G.step = 2; G.caught2 = [0, 0, 0]; G.flock = []; G.bf = null;
+  G.state = 'banner'; G.bannerT = 2.6;
+  $('bMsg').hidden = true;
+  $('bLvl').textContent = 'Step 2';
+  $('bLvl').style.animation = 'none'; void $('bLvl').offsetWidth; $('bLvl').style.animation = '';
+  $('bSub').textContent = 'The pond · all ' + STEP2_TOTAL + ' butterflies fly at once · ' + fmt(G.timeLeft) + ' left on the clock';
+  $('banner').hidden = false;
+  renderHud(true);
+  measureHud();
+}
+function spawnFlock() {
+  G.flock = [];
+  STEP2.forEach(L => { for (let i = 0; i < L.count; i++) G.flock.push(makeButterfly(L, false)); });
+}
+function tryCatchFlock(x, y) {
+  let near = null, nearD = Infinity;
+  for (const b of G.flock) { const d = Math.hypot(x - b.x, y - b.y); if (d < nearD) { nearD = d; near = b; } }
+  if (near && nearD <= near.L.hit * S) {
+    const L = near.L;
+    G.hits++; G.caught++; G.score += L.points; G.caught2[STEP2.indexOf(L)]++;
+    burst(near.x, near.y, L);
+    floater(near.x, near.y - 20 * S, '+' + L.points, L.color2);
+    G.flock.splice(G.flock.indexOf(near), 1);
+    if (!G.flock.length) { G.state = 'finishing'; G.endT = 0.9; G.result = 'win'; }
+  } else {
+    G.ripples.push({ x, y, t: 0 });
+    // The butterfly nearest the missed click sets the penalty.
+    const L = near ? near.L : STEP2[0];
+    if (G.score > 0) {
+      G.score = Math.max(0, G.score - L.miss);
+      floater(x, y - 20 * S, '−' + L.miss, '#FF8A7A');
+    }
+  }
+}
+function endGame(result) {
+  G.state = 'over'; G.result = result;
+  G.bf = null; G.leaving = []; G.flock = [];
+  document.body.classList.remove('playing');
+  $('banner').hidden = true; $('hud').hidden = true; measureHud();
+  setAmbient();
+  const L = LEVELS[G.level];
+  const used = GAME_SECONDS - Math.max(0, G.timeLeft);
+  let best = 0;
+  try { best = +localStorage.getItem('catch-butterfly-best') || 0; } catch (e) {}
+  const isBest = G.score > best;
+  if (isBest) { best = G.score; try { localStorage.setItem('catch-butterfly-best', String(best)); } catch (e) {} }
+  if (result === 'win') {
+    $('oTitle').textContent = 'You cleared the pond!';
+    $('oSub').textContent = 'You finished both steps and caught all ' + STEP2_TOTAL + ' pond butterflies with ' + fmt(G.timeLeft) + ' left on the clock.';
+  } else if (G.step === 2) {
+    $('oTitle').textContent = 'Time’s up at the pond';
+    $('oSub').textContent = 'You cleared Step 1 and caught ' + G.caught2.reduce((a, b) => a + b, 0) + ' of ' + STEP2_TOTAL + ' butterflies at the pond. Finish Step 1 faster to have more time for Step 2.';
+  } else {
+    $('oTitle').textContent = "Time's up";
+    $('oSub').textContent = G.level === 0
+      ? 'Catch ' + LEVELS[0].need + ' Monarchs faster to reach the Blue Morpho on level 2.'
+      : G.level === 1
+        ? 'You reached the Blue Morpho. Catch ' + LEVELS[1].need + ' of them faster to meet the Purple Emperor on level 3.'
+        : 'You reached the Purple Emperor. It only stays for ' + L.life + ' seconds, so only the quickest nets catch it.';
+  }
+  const acc = G.clicks ? Math.round((G.hits / G.clicks) * 100) + '%' : '–';
+  const stats = [
+    ['Score', G.score, true], G.step === 2 ? ['Reached', 'Step 2 · The Pond'] : ['Level reached', L.n + ' · ' + L.name], ['Butterflies caught', G.caught],
+    ['Escaped', G.escaped], ['Net accuracy', acc], ['Time used', fmt(used)],
+  ];
+  $('oStats').innerHTML = stats.map(([k, v, big]) =>
+    '<div class="stat' + (big ? ' big' : '') + '"><span class="lab">' + k + '</span><span class="val">' + v + '</span></div>').join('');
+  $('oBest').textContent = isBest && G.score > 0 ? 'New best score!' : 'Best score: ' + best;
+  $('over').hidden = false;
+  $('againBtn').focus();
+}
+function fmt(s) { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+
+/* ---------- HUD ---------- */
+const hudCache = {};
+function setText(id, v) { if (hudCache[id] !== v) { hudCache[id] = v; $(id).textContent = v; } }
+function renderHudStep2(force) {
+  setText('hLvlNum', 'Step 2');
+  setText('hLvlName', 'The Pond');
+  $('hChip').style.background = '#2B86A8';
+  setText('hScore', String(G.score));
+  setText('hClock', fmt(G.timeLeft));
+  $('hClockPill').classList.toggle('low', G.timeLeft <= 20);
+  const key = 's2:' + G.caught2.join(',');
+  if (force || hudCache.dots !== key) {
+    hudCache.dots = key;
+    $('hDots').innerHTML = STEP2.map((L, i) => {
+      let h = '';
+      for (let k = 0; k < L.count; k++) {
+        const on = k < G.caught2[i];
+        h += '<span class="dot' + (on ? ' on' : '') + '" style="' + (on ? 'background:' : 'border-color:') + L.color + '"></span>';
+      }
+      return h;
+    }).join('<span class="sep"></span>');
+  }
+}
+function renderHud(force) {
+  $('hMeterPill').hidden = G.step === 2;
+  if (G.step === 2) return renderHudStep2(force);
+  const L = LEVELS[G.level];
+  setText('hLvlNum', 'Level ' + L.n);
+  setText('hLvlName', L.name);
+  $('hChip').style.background = L.color;
+  setText('hScore', String(G.score));
+  setText('hClock', fmt(G.timeLeft));
+  $('hClockPill').classList.toggle('low', G.timeLeft <= 20);
+  const dotsKey = G.level + ':' + G.caughtLevel;
+  if (force || hudCache.dots !== dotsKey) {
+    hudCache.dots = dotsKey;
+    let html = '';
+    for (let i = 0; i < L.need; i++) html += '<span class="dot' + (i < G.caughtLevel ? ' on' : '') + '" style="' + (i < G.caughtLevel ? 'background:' + L.color : '') + '"></span>';
+    $('hDots').innerHTML = html;
+  }
+  const frac = G.bf ? Math.max(0, 1 - G.bf.t / L.life) : (G.state === 'playing' ? 0 : 1);
+  $('hFill').style.width = (frac * 100).toFixed(1) + '%';
+  $('hFill').classList.toggle('low', frac < 0.3);
+  setText('hMeterLab', G.bf ? 'Escapes in ' + Math.max(0, L.life - G.bf.t).toFixed(1) + ' s' : 'Escapes in');
+}
+
+/* ---------- loop ---------- */
+let last = performance.now(), clockT = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; clockT += dt;
+
+  if (G.state === 'banner') {
+    G.bannerT -= dt;
+    if (G.bannerT <= 0) { G.state = 'playing'; $('banner').hidden = true; if (G.step === 2) spawnFlock(); else spawn(); }
+  } else if (G.state === 'playing') {
+    G.timeLeft -= dt;
+    if (G.timeLeft <= 0) { G.timeLeft = 0; endGame('time'); }
+    else if (G.step === 2) {
+      for (const b of G.flock) moveButterfly(b, dt);
+    } else if (G.bf) {
+      moveButterfly(G.bf, dt);
+      if (G.bf.t >= G.bf.L.life) escape();
+    } else {
+      G.spawnT -= dt;
+      if (G.spawnT <= 0) spawn();
+    }
+  } else if (G.state === 'finishing') {
+    G.endT -= dt;
+    if (G.endT <= 0) endGame('win');
+  }
+  for (const b of G.leaving) moveButterfly(b, dt);
+  G.leaving = G.leaving.filter(b => b.alpha > 0 && b.y > -80);
+  for (const b of G.ambient) moveButterfly(b, dt);
+  updateEffects(dt);
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawScene(clockT, dt);
+  for (const b of G.ambient) renderButterfly(b);
+  for (const b of G.leaving) renderButterfly(b);
+  for (const b of G.flock) renderButterfly(b);
+  if (G.bf) renderButterfly(G.bf);
+  drawEffects();
+  drawNet();
+  if (G.state !== 'menu' && G.state !== 'over') renderHud(false);
+  requestAnimationFrame(frame);
+}
+
+/* ---------- input ---------- */
+cv.addEventListener('pointermove', e => { pointer.x = e.clientX; pointer.y = e.clientY; pointer.mouse = e.pointerType === 'mouse'; });
+cv.addEventListener('pointerleave', () => { pointer.x = pointer.y = -999; });
+cv.addEventListener('pointerdown', e => {
+  pointer.x = e.clientX; pointer.y = e.clientY; pointer.mouse = e.pointerType === 'mouse';
+  if (G.state === 'playing') { e.preventDefault(); tryCatch(e.clientX, e.clientY); }
+});
+$('startBtn').addEventListener('click', startGame);
+$('againBtn').addEventListener('click', startGame);
+addEventListener('resize', resize);
+
+/* ---------- menu ---------- */
+function buildMenu() {
+  $('levelCards').innerHTML = LEVELS.map((L, i) =>
+    '<div class="lv"><canvas width="144" height="112" data-i="' + i + '"></canvas>' +
+    '<span class="n">Level ' + L.n + (i === 2 ? ' · final' : '') + '</span><span class="nm" style="color:' + L.edge + '">' + L.name + '</span>' +
+    '<ul><li><b>' + L.points + '</b> points each</li><li>Catch <b>' + L.need + '</b> to ' + 'clear' + '</li><li><b>' + L.life + ' s</b> before it escapes</li>' + (L.miss ? '<li><b>−' + L.miss + '</b> per missed click</li>' : '') + '</ul></div>'
+  ).join('');
+  $('levelCards').querySelectorAll('canvas').forEach(c => {
+    const L = LEVELS[+c.dataset.i], x = c.getContext('2d');
+    x.scale(2, 2);
+    drawButterfly(x, 36, 30, -Math.PI / 2, 0.58, 1, L, 1);
+  });
+  let best = 0;
+  try { best = +localStorage.getItem('catch-butterfly-best') || 0; } catch (e) {}
+  $('bestNote').textContent = best ? 'Best score: ' + best : '3:00 on the clock';
+}
+
+resize();
+buildMenu();
+setAmbient();
+$('startBtn').focus();
+requestAnimationFrame(frame);
+})();
+</script>
